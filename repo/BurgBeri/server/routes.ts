@@ -142,7 +142,9 @@ const updateVacancySchema = createVacancySchema.partial();
 
 const createLoyaltyRuleSchema = z.object({
   ordersThreshold: z.number().int().positive(),
-  discountPercent: z.number().int().min(1).max(100),
+  discountType: z.enum(["percent", "amount"]),
+  discountValue: z.number().int().positive(),
+  usageLimit: z.number().int().positive().optional().nullable(),
   promoCode: z.string().min(2),
   isActive: z.boolean().optional().default(true),
 });
@@ -415,6 +417,50 @@ export async function registerRoutes(
         phone: user.phone,
         email: user.email,
         createdAt: user.createdAt,
+      });
+    } catch (err) {
+      handleError(res, err);
+    }
+  });
+
+  router.get("/users/dashboard", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ message: "Не авторизован" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        req.session.userId = undefined;
+        return res.status(401).json({ message: "Не авторизован" });
+      }
+
+      const ordersWithItems = await storage.getUserOrders(user.id, 20);
+      const totalOrders = await storage.countUserOrders(user.id);
+      const loyaltyRules = await storage.getLoyaltyRules();
+
+      const decoratedRules = loyaltyRules
+        .filter((r) => r.isActive !== false)
+        .map((rule) => ({
+          ...rule,
+          discountType: rule.discountType || 'percent',
+          discountValue: rule.discountValue ?? 0,
+          achieved: totalOrders >= rule.ordersThreshold,
+          remaining: Math.max(rule.ordersThreshold - totalOrders, 0),
+        }));
+
+      res.json({
+        user: {
+          id: user.id,
+          nickname: user.nickname,
+          phone: user.phone,
+          email: user.email,
+          createdAt: user.createdAt,
+        },
+        orders: ordersWithItems,
+        totalOrders,
+        loyaltyRules: decoratedRules,
+        lastOrder: ordersWithItems[0]?.order,
       });
     } catch (err) {
       handleError(res, err);
@@ -1056,17 +1102,22 @@ export async function registerRoutes(
 
       const updatedOrdersCount = (customer.totalOrders || 0) + 1;
       const loyaltyRules = await storage.getLoyaltyRules();
+      const ordersCompleted = req.session.userId
+        ? await storage.countUserOrders(req.session.userId)
+        : updatedOrdersCount;
       const applicableRule = loyaltyRules
         .filter((rule) => rule.isActive !== false)
-        .filter((rule) => rule.ordersThreshold <= updatedOrdersCount)
+        .filter((rule) => rule.ordersThreshold <= ordersCompleted)
         .sort((a, b) => (b.ordersThreshold || 0) - (a.ordersThreshold || 0))[0];
 
       const loyaltyReward = applicableRule
         ? {
             promoCode: applicableRule.promoCode,
-            discountPercent: applicableRule.discountPercent,
+            discountType: applicableRule.discountType || 'percent',
+            discountValue: applicableRule.discountValue ?? 0,
+            usageLimit: applicableRule.usageLimit,
             ordersThreshold: applicableRule.ordersThreshold,
-            achievedOrders: updatedOrdersCount,
+            achievedOrders: ordersCompleted,
           }
         : undefined;
 

@@ -91,7 +91,9 @@ export const vacancies = pgTable("vacancies", {
 export const loyaltyRules = pgTable("loyalty_rules", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   ordersThreshold: integer("orders_threshold").notNull(),
-  discountPercent: integer("discount_percent").notNull(),
+  discountType: text("discount_type").notNull().default("percent"),
+  discountValue: integer("discount_value").notNull(),
+  usageLimit: integer("usage_limit"),
   promoCode: text("promo_code").notNull(),
   isActive: boolean("is_active").default(true),
 });
@@ -259,12 +261,20 @@ export const insertVacancySchema = createInsertSchema(vacancies).pick({
   contacts: true,
 });
 
-export const insertLoyaltyRuleSchema = createInsertSchema(loyaltyRules).pick({
-  ordersThreshold: true,
-  discountPercent: true,
-  promoCode: true,
-  isActive: true,
-});
+export const insertLoyaltyRuleSchema = createInsertSchema(loyaltyRules)
+  .pick({
+    ordersThreshold: true,
+    discountType: true,
+    discountValue: true,
+    usageLimit: true,
+    promoCode: true,
+    isActive: true,
+  })
+  .extend({
+    discountType: z.enum(["percent", "amount"]),
+    discountValue: z.number().min(1),
+    usageLimit: z.number().int().positive().optional().nullable(),
+  });
 
 
 export const insertSiteSettingsSchema = createInsertSchema(siteSettings).pick({

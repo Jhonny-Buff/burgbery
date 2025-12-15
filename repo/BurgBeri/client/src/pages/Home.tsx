@@ -15,21 +15,15 @@ import { Footer } from '@/components/Footer';
 import type { SiteSettings, Product, Category } from '@shared/schema';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, getQueryFn, queryClient } from '@/lib/queryClient';
-import { UserAccount } from '@/components/UserAccount';
+import { UserAccount, type UserDashboard } from '@/components/UserAccount';
 
 interface LoyaltyRewardInfo {
   promoCode: string;
-  discountPercent: number;
+  discountType: 'percent' | 'amount';
+  discountValue: number;
+  usageLimit?: number | null;
   ordersThreshold: number;
   achievedOrders: number;
-}
-
-interface CurrentUser {
-  id: number;
-  nickname: string;
-  phone: string;
-  email?: string | null;
-  createdAt?: string;
 }
 
 
@@ -40,6 +34,7 @@ export default function Home() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('Все');
   const [currentPage, setCurrentPage] = useState('Главная');
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
 
@@ -55,10 +50,23 @@ export default function Home() {
     queryKey: ['/api/categories'],
   });
 
-  const { data: currentUser, refetch: refetchUser } = useQuery<CurrentUser | null>({
-    queryKey: ['/api/users/me'],
+  const { data: userDashboard, refetch: refetchDashboard } = useQuery<UserDashboard | null>({
+    queryKey: ['/api/users/dashboard'],
     queryFn: getQueryFn({ on401: 'returnNull' }),
   });
+
+  const currentUser = userDashboard?.user;
+  const lastOrder = userDashboard?.lastOrder;
+
+  const savedDetails = currentUser
+    ? {
+        customerName: currentUser.nickname,
+        customerPhone: currentUser.phone,
+        deliveryAddress: lastOrder?.deliveryAddress || '',
+        deliveryType: (lastOrder?.deliveryType as 'courier' | 'pickup') || 'courier',
+        paymentMethod: (lastOrder?.paymentMethod as 'cash' | 'card') || 'cash',
+      }
+    : undefined;
 
   const createOrderMutation = useMutation({
     mutationFn: async (orderData: any) => {
@@ -141,6 +149,7 @@ export default function Home() {
     try {
       const result = await createOrderMutation.mutateAsync(orderData);
       if (result.success && result.order) {
+        await refetchDashboard();
         return {
           success: true,
           orderId: result.order.id,
@@ -227,8 +236,6 @@ export default function Home() {
         return <DeliveryPage />;
       case 'Акции':
         return <PromotionsPage />;
-      case 'Личный кабинет':
-        return <UserAccount onAuthChange={refetchUser} />;
       default:
         return null;
     }
@@ -239,9 +246,11 @@ export default function Home() {
       <Header
         cartCount={cartCount}
         onCartClick={() => setIsCartOpen(true)}
+        onAccountClick={() => setIsAccountOpen(true)}
         currentPage={currentPage}
         onNavigate={setCurrentPage}
         logoUrl={settings?.logoImageUrl}
+        userNickname={currentUser?.nickname}
       />
       
       <main className="max-w-7xl mx-auto px-4 py-6 md:py-8">
@@ -278,7 +287,39 @@ export default function Home() {
         cartItems={cartItems}
         onSubmit={handleOrderSubmit}
         onClearCart={clearCart}
+        savedDetails={savedDetails}
       />
+
+      {isAccountOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center overflow-auto py-10 px-4">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-5xl shadow-2xl" data-testid="user-account-panel">
+            <div className="flex items-center justify-between px-6 pt-6 pb-3 border-b border-zinc-800">
+              <div>
+                <p className="text-sm text-zinc-400">Личный кабинет</p>
+                <h3 className="text-2xl text-white font-semibold">{currentUser ? currentUser.nickname : 'Вход и регистрация'}</h3>
+              </div>
+              <button
+                onClick={() => setIsAccountOpen(false)}
+                className="text-zinc-400 hover:text-white"
+                aria-label="Закрыть"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6">
+              <UserAccount
+                dashboard={userDashboard}
+                onAuthChange={async () => {
+                  await refetchDashboard();
+                  setIsAccountOpen(true);
+                }}
+                onClose={() => setIsAccountOpen(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

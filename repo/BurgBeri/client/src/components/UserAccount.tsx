@@ -7,6 +7,14 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { getQueryFn } from '@/lib/queryClient';
 
+export interface UserDashboard {
+  user: UserProfile;
+  orders: Array<{ order: UserOrder; items: UserOrderItem[] }>;
+  totalOrders: number;
+  loyaltyRules: LoyaltyRule[];
+  lastOrder?: UserOrder;
+}
+
 interface UserProfile {
   id: number;
   nickname: string;
@@ -15,27 +23,54 @@ interface UserProfile {
   createdAt?: string;
 }
 
+interface UserOrder {
+  id: number;
+  total: number;
+  status: string;
+  createdAt?: string;
+  promoCode?: string | null;
+  deliveryType: string;
+  paymentMethod: string;
+}
+
+interface UserOrderItem {
+  id: number;
+  productName: string;
+  productPrice: number;
+  quantity: number;
+  orderId: number;
+}
+
 interface LoyaltyRule {
   id: number;
   ordersThreshold: number;
-  discountPercent: number;
+  discountType: 'percent' | 'amount';
+  discountValue: number;
+  usageLimit?: number | null;
   promoCode: string;
   isActive?: boolean | null;
+  achieved?: boolean;
+  remaining?: number;
 }
 
 interface UserAccountProps {
+  dashboard?: UserDashboard | null;
   onAuthChange?: () => void;
+  onClose?: () => void;
 }
 
-export function UserAccount({ onAuthChange }: UserAccountProps) {
-  const { data: user, refetch } = useQuery<UserProfile | null>({
-    queryKey: ['/api/users/me'],
+export function UserAccount({ dashboard, onAuthChange, onClose }: UserAccountProps) {
+  const isExternalData = !!dashboard;
+  const { data: fetchedDashboard, refetch } = useQuery<UserDashboard | null>({
+    queryKey: ['/api/users/dashboard'],
     queryFn: getQueryFn({ on401: 'returnNull' }),
+    enabled: !isExternalData,
   });
 
-  const { data: rules = [] } = useQuery<LoyaltyRule[]>({
-    queryKey: ['/api/loyalty-rules/active'],
-  });
+  const data = dashboard ?? fetchedDashboard ?? null;
+  const user = data?.user;
+  const rules = data?.loyaltyRules || [];
+  const orders = data?.orders || [];
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [loading, setLoading] = useState(false);
@@ -47,6 +82,16 @@ export function UserAccount({ onAuthChange }: UserAccountProps) {
     password: '',
     consent: true,
   });
+
+  const refreshDashboard = async () => {
+    if (!isExternalData) {
+      await refetch();
+    }
+    await onAuthChange?.();
+  };
+
+  const formatDiscount = (rule: Pick<LoyaltyRule, 'discountType' | 'discountValue'>) =>
+    rule.discountType === 'percent' ? `${rule.discountValue}%` : `${rule.discountValue} ₽`;
 
   const updateField = (key: keyof typeof form, value: string | boolean) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -80,8 +125,7 @@ export function UserAccount({ onAuthChange }: UserAccountProps) {
       }
 
       setMessage(mode === 'login' ? 'Вход выполнен' : 'Регистрация завершена');
-      await refetch();
-      onAuthChange?.();
+      await refreshDashboard();
     } catch (err: any) {
       setMessage(err?.message || 'Ошибка запроса');
     } finally {
@@ -94,8 +138,7 @@ export function UserAccount({ onAuthChange }: UserAccountProps) {
     setMessage(null);
     try {
       await fetch('/api/users/logout', { method: 'POST', credentials: 'include' });
-      await refetch();
-      onAuthChange?.();
+      await refreshDashboard();
       setMessage('Вы вышли из аккаунта');
     } catch (err: any) {
       setMessage(err?.message || 'Не удалось выйти');
@@ -114,7 +157,7 @@ export function UserAccount({ onAuthChange }: UserAccountProps) {
         </CardHeader>
         <CardContent className="space-y-6">
           {user ? (
-            <div className="space-y-4 text-zinc-200">
+            <div className="space-y-6 text-zinc-200">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p className="text-zinc-400 text-sm">Никнейм</p>
@@ -136,7 +179,54 @@ export function UserAccount({ onAuthChange }: UserAccountProps) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="bg-zinc-800/60 border border-zinc-800 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-zinc-400">История заказов</p>
+                    <p className="text-lg text-white">Последние {orders.length || 0} заказов</p>
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-orange-600/20 text-orange-300 text-sm">
+                    Всего: {data?.totalOrders ?? 0}
+                  </span>
+                </div>
+
+                {orders.length === 0 ? (
+                  <p className="text-zinc-400 text-sm">Заказов пока нет.</p>
+                ) : (
+                  <div className="space-y-3 max-h-72 overflow-auto pr-1">
+                    {orders.map(({ order, items }) => (
+                      <div
+                        key={order.id}
+                        className="p-3 rounded-lg border border-zinc-800 bg-zinc-900/60"
+                      >
+                        <div className="flex flex-wrap justify-between gap-2 text-sm text-zinc-300">
+                          <span className="font-semibold text-white">#{order.id}</span>
+                          <span>{order.createdAt ? new Date(order.createdAt).toLocaleString('ru-RU') : ''}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-400 mt-2">
+                          <span className="px-2 py-1 rounded-full bg-zinc-800 text-zinc-200">
+                            {order.status}
+                          </span>
+                          <span className="px-2 py-1 rounded-full bg-zinc-800 text-zinc-200">
+                            {order.deliveryType === 'pickup' ? 'Самовывоз' : 'Доставка'}
+                          </span>
+                          <span className="px-2 py-1 rounded-full bg-zinc-800 text-orange-300">
+                            {order.total} ₽
+                          </span>
+                        </div>
+                        <p className="text-sm text-zinc-400 mt-2">
+                          {items.map((item) => `${item.productName} × ${item.quantity}`).join(', ')}
+                        </p>
+                        {order.promoCode && (
+                          <p className="text-xs text-green-400 mt-1">Использован промокод {order.promoCode}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 flex-wrap">
                 <Button
                   variant="outline"
                   onClick={handleLogout}
@@ -145,6 +235,11 @@ export function UserAccount({ onAuthChange }: UserAccountProps) {
                 >
                   Выйти
                 </Button>
+                {onClose && (
+                  <Button variant="ghost" className="text-zinc-300" onClick={onClose}>
+                    Закрыть
+                  </Button>
+                )}
                 {message && <span className="text-zinc-400 text-sm">{message}</span>}
               </div>
             </div>
@@ -234,7 +329,12 @@ export function UserAccount({ onAuthChange }: UserAccountProps) {
 
       <Card className="bg-zinc-900 border-zinc-800">
         <CardHeader>
-          <CardTitle className="text-white">Программа лояльности</CardTitle>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <CardTitle className="text-white">Программа лояльности</CardTitle>
+            {user && (
+              <span className="text-sm text-zinc-400">У вас {data?.totalOrders ?? 0} заказов</span>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-3 text-zinc-200">
           {rules.length === 0 ? (
@@ -245,10 +345,20 @@ export function UserAccount({ onAuthChange }: UserAccountProps) {
                 key={rule.id}
                 className="p-3 rounded-lg border border-zinc-800 bg-zinc-800/60"
               >
-                <p className="text-white font-medium">
-                  {rule.ordersThreshold} заказ{rule.ordersThreshold > 1 ? 'ов' : ''} — {rule.discountPercent}% скидка
+                <p className="text-white font-medium flex items-center gap-2 flex-wrap">
+                  {rule.ordersThreshold} заказ{rule.ordersThreshold > 1 ? 'ов' : ''} → {formatDiscount(rule)}
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${
+                      rule.achieved ? 'bg-green-500/10 text-green-300' : 'bg-zinc-700 text-zinc-200'
+                    }`}
+                  >
+                    {rule.achieved ? 'Доступно' : `Еще ${rule.remaining} заказов`}
+                  </span>
                 </p>
                 <p className="text-zinc-400 text-sm">Промокод: {rule.promoCode}</p>
+                <p className="text-zinc-500 text-xs">
+                  {rule.usageLimit ? `Можно применить ${rule.usageLimit} раз` : 'Без ограничений по количеству применений'}
+                </p>
               </div>
             ))
           )}

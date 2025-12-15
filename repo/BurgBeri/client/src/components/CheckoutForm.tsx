@@ -20,7 +20,9 @@ import { SimpleCaptcha } from './SimpleCaptcha';
 
 interface LoyaltyRewardInfo {
   promoCode: string;
-  discountPercent: number;
+  discountType: 'percent' | 'amount';
+  discountValue: number;
+  usageLimit?: number | null;
   ordersThreshold: number;
   achievedOrders: number;
 }
@@ -57,9 +59,16 @@ interface CheckoutFormProps {
   cartItems: CartItem[];
   onSubmit: (data: CheckoutFormData) => Promise<{ success: boolean; message?: string; orderId?: number; loyaltyReward?: LoyaltyRewardInfo }>;
   onClearCart: () => void;
+  savedDetails?: {
+    customerName?: string;
+    customerPhone?: string;
+    deliveryAddress?: string;
+    deliveryType?: 'courier' | 'pickup';
+    paymentMethod?: 'cash' | 'card';
+  };
 }
 
-export function CheckoutForm({ isOpen, onClose, cartItems, onSubmit, onClearCart }: CheckoutFormProps) {
+export function CheckoutForm({ isOpen, onClose, cartItems, onSubmit, onClearCart, savedDetails }: CheckoutFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [captchaVerified, setCaptchaVerified] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -75,6 +84,11 @@ export function CheckoutForm({ isOpen, onClose, cartItems, onSubmit, onClearCart
   const discountAmount = Math.round(subtotal * (promoDiscount / 100));
   const total = subtotal - discountAmount;
 
+  const formatRewardValue = (reward: LoyaltyRewardInfo) =>
+    reward.discountType === 'percent'
+      ? `${reward.discountValue}%`
+      : `${reward.discountValue} ₽`;
+
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
@@ -87,6 +101,20 @@ export function CheckoutForm({ isOpen, onClose, cartItems, onSubmit, onClearCart
       promoCode: '',
     },
   });
+
+  useEffect(() => {
+    if (isOpen && savedDetails) {
+      form.reset({
+        customerName: savedDetails.customerName || '',
+        customerPhone: savedDetails.customerPhone || '',
+        deliveryType: savedDetails.deliveryType || 'courier',
+        deliveryAddress: savedDetails.deliveryAddress || '',
+        paymentMethod: savedDetails.paymentMethod || 'cash',
+        utensilsCount: form.getValues('utensilsCount') ?? 1,
+        promoCode: form.getValues('promoCode') || '',
+      });
+    }
+  }, [savedDetails, isOpen]);
 
   const deliveryType = form.watch('deliveryType');
 
@@ -246,10 +274,12 @@ export function CheckoutForm({ isOpen, onClose, cartItems, onSubmit, onClearCart
                     Бонус за {orderSuccess.loyaltyReward.ordersThreshold} заказов
                   </p>
                   <p className="text-white text-lg">
-                    Промокод {orderSuccess.loyaltyReward.promoCode} на скидку {orderSuccess.loyaltyReward.discountPercent}%
+                    Промокод {orderSuccess.loyaltyReward.promoCode} на скидку {formatRewardValue(orderSuccess.loyaltyReward)}
                   </p>
                   <p className="text-zinc-300 text-sm">
-                    Введите промокод при следующем заказе, он уже доступен.
+                    {orderSuccess.loyaltyReward.usageLimit
+                      ? `Доступно использований: ${orderSuccess.loyaltyReward.usageLimit}`
+                      : 'Можно использовать без ограничений'}
                   </p>
                 </div>
               )}

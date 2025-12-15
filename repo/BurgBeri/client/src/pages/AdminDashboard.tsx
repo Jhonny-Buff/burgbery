@@ -29,13 +29,24 @@ import { AdminBlacklist } from '@/components/admin/AdminBlacklist';
 import { AdminPromoCodes } from '@/components/admin/AdminPromoCodes';
 import { AdminVacancies } from '@/components/admin/AdminVacancies';
 import { AdminLoyalty } from '@/components/admin/AdminLoyalty';
+import { AdminSettings } from '@/components/admin/AdminSettings';
 import type { Order, Customer, Product } from '@shared/schema';
 
 interface AdminDashboardProps {
   onLogout: () => void;
 }
 
-type AdminTab = 'overview' | 'categories' | 'products' | 'orders' | 'customers' | 'blacklist' | 'promo' | 'vacancies' | 'loyalty';
+type AdminTab =
+  | 'overview'
+  | 'categories'
+  | 'products'
+  | 'orders'
+  | 'customers'
+  | 'blacklist'
+  | 'promo'
+  | 'vacancies'
+  | 'loyalty'
+  | 'settings';
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [, navigate] = useLocation();
@@ -81,6 +92,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     { id: 'promo', label: 'Промокоды', icon: Ticket },
     { id: 'vacancies', label: 'Вакансии', icon: Briefcase },
     { id: 'loyalty', label: 'Программа лояльности', icon: Gift },
+    { id: 'settings', label: 'Настройки сайта', icon: Settings },
   ];
 
   const renderContent = () => {
@@ -199,6 +211,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         return <AdminVacancies />;
       case 'loyalty':
         return <AdminLoyalty />;
+      case 'settings':
+        return <AdminSettings />;
       default:
         return null;
     }

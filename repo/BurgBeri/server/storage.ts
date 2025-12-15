@@ -43,7 +43,7 @@ import {
   type OrderStatus,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, like, or, sql } from "drizzle-orm";
+import { eq, desc, asc, like, or, sql, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
 export interface IStorage {
@@ -76,6 +76,10 @@ export interface IStorage {
   getCustomerByPhone(phone: string): Promise<Customer | undefined>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   updateCustomerStats(id: number, orderTotal: number): Promise<void>;
+
+  countUserOrders(userId: number): Promise<number>;
+  getUserOrders(userId: number, limit?: number): Promise<{ order: Order; items: OrderItem[] }[]>;
+  getLastUserOrder(userId: number): Promise<Order | undefined>;
 
   getBlacklist(): Promise<Blacklist[]>;
   isPhoneBlacklisted(phone: string): Promise<boolean>;
@@ -309,6 +313,52 @@ export class DatabaseStorage implements IStorage {
     if (!order) return undefined;
     const items = await this.getOrderItems(id);
     return { order, items };
+  }
+
+  async countUserOrders(userId: number): Promise<number> {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(orders)
+      .where(eq(orders.userId, userId));
+
+    return Number(row?.count || 0);
+  }
+
+  async getUserOrders(userId: number, limit = 20): Promise<{ order: Order; items: OrderItem[] }[]> {
+    const orderList = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.userId, userId))
+      .orderBy(desc(orders.createdAt))
+      .limit(limit);
+
+    if (orderList.length === 0) return [];
+
+    const ids = orderList.map((o) => o.id);
+    const items = await db
+      .select()
+      .from(orderItems)
+      .where(inArray(orderItems.orderId, ids));
+
+    const grouped = new Map<number, OrderItem[]>();
+    for (const item of items) {
+      const list = grouped.get(item.orderId) || [];
+      list.push(item);
+      grouped.set(item.orderId, list);
+    }
+
+    return orderList.map((order) => ({ order, items: grouped.get(order.id) || [] }));
+  }
+
+  async getLastUserOrder(userId: number): Promise<Order | undefined> {
+    const [lastOrder] = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.userId, userId))
+      .orderBy(desc(orders.createdAt))
+      .limit(1);
+
+    return lastOrder || undefined;
   }
 
   async createOrder(order: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>): Promise<Order> {

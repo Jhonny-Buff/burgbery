@@ -1,18 +1,20 @@
-import { ShoppingCart, Phone, MapPin, Menu } from 'lucide-react';
+import { ShoppingCart, Phone, MapPin, Menu, User } from 'lucide-react';
 import { ImageWithFallback } from './ImageWithFallback';
 import { useState } from 'react';
 
 interface HeaderProps {
   cartCount: number;
   onCartClick: () => void;
+  onAccountClick: () => void;
   currentPage: string;
   onNavigate: (page: string) => void;
   logoUrl?: string | null;
+  userNickname?: string;
 }
 
-export function Header({ cartCount, onCartClick, currentPage, onNavigate, logoUrl }: HeaderProps) {
+export function Header({ cartCount, onCartClick, onAccountClick, currentPage, onNavigate, logoUrl, userNickname }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const navItems = ['Главная', 'Новинки', 'Меню', 'Оплата и доставка', 'Акции', 'Личный кабинет'];
+  const navItems = ['Главная', 'Новинки', 'Меню', 'Оплата и доставка', 'Акции'];
   const defaultLogo =
     "https://images.unsplash.com/photo-1562296761-5d2add43d7d5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxidXJnZXIlMjBsb2dvJTIwaWNvbnxlbnwxfHx8fDE3NjQ4OTY3MzB8MA&ixlib=rb-4.1.0&q=80&w=1080";
 
@@ -78,6 +80,17 @@ export function Header({ cartCount, onCartClick, currentPage, onNavigate, logoUr
               </span>
             )}
           </button>
+
+          <button
+            onClick={() => {
+              setMobileMenuOpen(false);
+              onAccountClick();
+            }}
+            className="hidden md:flex items-center gap-2 text-white bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-full border border-zinc-700"
+          >
+            <User className="w-5 h-5" />
+            <span>{userNickname ? userNickname : 'Войти'}</span>
+          </button>
         </div>
 
         {mobileMenuOpen && (
@@ -98,6 +111,16 @@ export function Header({ cartCount, onCartClick, currentPage, onNavigate, logoUr
                 {item}
               </button>
             ))}
+            <button
+              onClick={() => {
+                onAccountClick();
+                setMobileMenuOpen(false);
+              }}
+              className="flex items-center gap-2 text-white bg-zinc-800 border border-zinc-700 px-3 py-2 rounded-lg"
+            >
+              <User className="w-4 h-4" />
+              <span>{userNickname ? userNickname : 'Войти'}</span>
+            </button>
             <div className="flex items-center gap-2 text-orange-500 py-2 px-2 md:hidden">
               <Phone className="w-4 h-4" />
               <a href="tel:+79181772033">+7 918 177 20 33</a>

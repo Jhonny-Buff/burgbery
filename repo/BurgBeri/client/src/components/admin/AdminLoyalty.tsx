@@ -11,7 +11,9 @@ import { useToast } from '@/hooks/use-toast';
 interface LoyaltyRule {
   id: number;
   ordersThreshold: number;
-  discountPercent: number;
+  discountType: 'percent' | 'amount';
+  discountValue: number;
+  usageLimit?: number | null;
   promoCode: string;
   isActive?: boolean | null;
 }
@@ -73,7 +75,9 @@ export function AdminLoyalty() {
     setEditing(null);
     setForm({
       ordersThreshold: 5,
-      discountPercent: 10,
+      discountType: 'percent',
+      discountValue: 10,
+      usageLimit: null,
       promoCode: 'SALE10',
       isActive: true,
     });
@@ -86,13 +90,16 @@ export function AdminLoyalty() {
   };
 
   const handleSave = () => {
-    if (!form.ordersThreshold || !form.discountPercent || !form.promoCode) return;
+    if (!form.ordersThreshold || !form.discountValue || !form.promoCode || !form.discountType) return;
     if (editing) {
       updateMutation.mutate({ id: editing.id, data: form });
     } else {
       createMutation.mutate(form);
     }
   };
+
+  const formatDiscount = (rule: LoyaltyRule) =>
+    rule.discountType === 'percent' ? `${rule.discountValue}%` : `${rule.discountValue} ₽`;
 
   if (isLoading) {
     return (
@@ -131,14 +138,25 @@ export function AdminLoyalty() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm text-zinc-300">Скидка, %</label>
+                <label className="text-sm text-zinc-300">Тип скидки</label>
+                <select
+                  value={form.discountType ?? 'percent'}
+                  onChange={(e) => setForm({ ...form, discountType: e.target.value as LoyaltyRule['discountType'] })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-3 py-2 text-white"
+                >
+                  <option value="percent">Процент</option>
+                  <option value="amount">Фиксированная сумма</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300">Значение скидки</label>
                 <Input
                   type="number"
                   min={1}
-                  max={100}
-                  value={form.discountPercent ?? ''}
-                  onChange={(e) => setForm({ ...form, discountPercent: parseInt(e.target.value) || 0 })}
+                  value={form.discountValue ?? ''}
+                  onChange={(e) => setForm({ ...form, discountValue: parseInt(e.target.value) || 0 })}
                   className="bg-zinc-800 border-zinc-700 text-white"
+                  placeholder={form.discountType === 'percent' ? '10 (процентов)' : '200 (рублей)'}
                 />
               </div>
               <div className="space-y-2">
@@ -148,6 +166,19 @@ export function AdminLoyalty() {
                   onChange={(e) => setForm({ ...form, promoCode: e.target.value.toUpperCase() })}
                   className="bg-zinc-800 border-zinc-700 text-white uppercase"
                   placeholder="SALE10"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300">Количество применений (опционально)</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={form.usageLimit ?? ''}
+                  onChange={(e) =>
+                    setForm({ ...form, usageLimit: e.target.value ? parseInt(e.target.value) : null })
+                  }
+                  className="bg-zinc-800 border-zinc-700 text-white"
+                  placeholder="Например 1 для разовой акции"
                 />
               </div>
               <div className="flex items-center gap-2 pt-6">
@@ -195,9 +226,12 @@ export function AdminLoyalty() {
                 >
                   <div className="flex-1 text-white">
                     <div className="font-semibold">
-                      {rule.ordersThreshold} заказов → {rule.discountPercent}% скидка
+                      {rule.ordersThreshold} заказов → {formatDiscount(rule)}
                     </div>
                     <div className="text-sm text-zinc-400">Промокод: {rule.promoCode}</div>
+                    {rule.usageLimit && (
+                      <div className="text-xs text-zinc-500">Применений: {rule.usageLimit}</div>
+                    )}
                   </div>
                   {rule.isActive !== false ? (
                     <span className="flex items-center gap-1 text-green-400 text-sm">
