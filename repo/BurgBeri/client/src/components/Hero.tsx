@@ -2,13 +2,18 @@ import { ImageWithFallback } from './ImageWithFallback';
 
 interface HeroProps {
   onNavigate: (page: string) => void;
+  heroImageUrl?: string | null;
 }
 
-export function Hero({ onNavigate }: HeroProps) {
+export function Hero({ onNavigate, heroImageUrl }: HeroProps) {
+  const fallbackHero =
+    'https://images.unsplash.com/photo-1651993841930-946a700c1524?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxidXJnZXIlMjBwaXp6YSUyMGRhcmslMjBiYWNrZ3JvdW5kfGVufDF8fHx8MTc2NDg5NjczMHww&ixlib=rb-4.1.0&q=80&w=1080';
+  const heroSrc = heroImageUrl && heroImageUrl.trim().length > 0 ? heroImageUrl : fallbackHero;
+
   return (
     <div className="relative h-[400px] md:h-[500px] overflow-hidden rounded-2xl md:rounded-3xl mb-8 md:mb-12">
       <ImageWithFallback
-        src="https://images.unsplash.com/photo-1651993841930-946a700c1524?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxidXJnZXIlMjBwaXp6YSUyMGRhcmslMjBiYWNrZ3JvdW5kfGVufDF8fHx8MTc2NDg5NjczMHww&ixlib=rb-4.1.0&q=80&w=1080"
+        src={heroSrc}
         alt="Бургбери баннер"
         className="w-full h-full object-cover"
         data-testid="img-hero"
