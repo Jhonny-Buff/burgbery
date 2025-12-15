@@ -9,7 +9,6 @@ import session from "express-session";
 import { z } from "zod";
 import fs from "fs";
 import path from "path";
-import multer from "multer";
 import { storage } from "./storage";
 import type { OrderStatus } from "@shared/schema";
 import {
@@ -165,6 +164,42 @@ const backupSchema = z.object({
 const WORK_START_MINUTES = 10 * 60;
 const WORK_END_MINUTES = 22 * 60 + 45;
 
+function parseSingleFileMultipart(
+  req: Request,
+): { filename: string; buffer: Buffer } | null {
+  const contentType = req.headers["content-type"] || "";
+  const boundaryMatch = contentType.match(/boundary=([^;]+)/i);
+  if (!boundaryMatch) return null;
+
+  const boundary = `--${boundaryMatch[1]}`;
+  const bodyBuffer = req.body as Buffer;
+  if (!Buffer.isBuffer(bodyBuffer)) return null;
+
+  const parts = bodyBuffer.toString("binary").split(boundary);
+  for (const part of parts) {
+    if (!part.includes('name="file"')) continue;
+
+    const [rawHeaders, rawContent] = part.split("\r\n\r\n");
+    if (!rawContent) continue;
+
+    const dispositionMatch = rawHeaders.match(/filename="([^"]*)"/);
+    const originalName = dispositionMatch?.[1] || "upload.bin";
+
+    let contentBinary = rawContent;
+    if (contentBinary.endsWith("\r\n--")) {
+      contentBinary = contentBinary.slice(0, -4);
+    }
+    if (contentBinary.endsWith("\r\n")) {
+      contentBinary = contentBinary.slice(0, -2);
+    }
+
+    const buffer = Buffer.from(contentBinary, "binary");
+    return { filename: originalName, buffer };
+  }
+
+  return null;
+}
+
 function getMoscowMinutes(date = new Date()): number {
   const formatter = new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
@@ -227,18 +262,11 @@ export async function registerRoutes(
   }
   app.use("/uploads", express.static(uploadsDir));
 
-  const uploadStorage = multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, uploadsDir),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname) || ".jpg";
-      const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      cb(null, `${unique}${ext}`);
-    },
-  });
-
-  const upload = multer({
-    storage: uploadStorage,
-    limits: { fileSize: 10 * 1024 * 1024 },
+  const uploadBodyParser = express.raw({
+    type: (req) =>
+      typeof req.headers["content-type"] === "string" &&
+      req.headers["content-type"].startsWith("multipart/form-data"),
+    limit: "10mb",
   });
 
   // ----- Default admin -----
@@ -475,13 +503,22 @@ export async function registerRoutes(
   router.post(
     "/uploads",
     requireAdmin,
-    upload.single("file"),
+    uploadBodyParser,
     (req: Request, res: Response) => {
       try {
-        if (!req.file) {
+        const file = parseSingleFileMultipart(req);
+        if (!file) {
           return res.status(400).json({ message: "Файл не получен" });
         }
-        const url = `/uploads/${req.file.filename}`;
+
+        const ext = path.extname(file.filename) || ".jpg";
+        const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
+        const finalName = `${unique}${ext}`;
+        const finalPath = path.join(uploadsDir, finalName);
+
+        fs.writeFileSync(finalPath, file.buffer);
+
+        const url = `/uploads/${finalName}`;
         res.status(201).json({ url });
       } catch (err) {
         handleError(res, err);
