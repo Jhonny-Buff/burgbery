@@ -66,9 +66,11 @@ export interface IStorage {
   deleteProduct(id: number): Promise<boolean>;
 
   getUser(id: number): Promise<User | undefined>;
+  getUsers(): Promise<User[]>;
   getUserByPhone(phone: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
   validateUserPassword(phoneOrEmail: string, password: string): Promise<User | null>;
 
   getCustomers(): Promise<Customer[]>;
@@ -194,6 +196,10 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
+  async getUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
   async getUserByPhone(phone: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.phone, phone));
     return user || undefined;
@@ -211,6 +217,21 @@ export class DatabaseStorage implements IStorage {
       .values({ ...user, password: hashedPassword })
       .returning();
     return created;
+  }
+
+  async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {
+    const updatePayload = { ...user } as Partial<InsertUser>;
+    if (user.password) {
+      updatePayload.password = await bcrypt.hash(user.password, 10);
+    }
+
+    const [updated] = await db
+      .update(users)
+      .set(updatePayload)
+      .where(eq(users.id, id))
+      .returning();
+
+    return updated || undefined;
   }
 
   async validateUserPassword(

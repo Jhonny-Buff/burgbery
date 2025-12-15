@@ -19,6 +19,7 @@ export function AdminProducts() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [uploading, setUploading] = useState(false);
   const [formData, setFormData] = useState<Partial<InsertProduct>>({
     name: '',
     description: '',
@@ -100,6 +101,27 @@ export function AdminProducts() {
     });
   };
 
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const uploadData = new FormData();
+    uploadData.append('file', file);
+    setUploading(true);
+
+    try {
+      const res = await apiRequest('POST', '/api/uploads', uploadData);
+      const data = await res.json();
+      setFormData((prev) => ({ ...prev, image: data.url }));
+      toast({ title: 'Изображение загружено' });
+    } catch (err) {
+      toast({ title: 'Не удалось загрузить изображение', variant: 'destructive' });
+    } finally {
+      setUploading(false);
+      event.target.value = '';
+    }
+  };
+
   const openEditDialog = (product: Product) => {
     setEditingProduct(product);
     setFormData({
@@ -162,7 +184,11 @@ export function AdminProducts() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h2 className="text-white text-2xl" data-testid="text-admin-products-title">Товары</h2>
         <Button
-          onClick={() => setIsDialogOpen(true)}
+          onClick={() => {
+            setEditingProduct(null);
+            closeDialog();
+            setIsDialogOpen(true);
+          }}
           className="bg-orange-600 hover:bg-orange-700"
           data-testid="button-add-product"
         >
@@ -336,6 +362,10 @@ export function AdminProducts() {
                 className="bg-zinc-800 border-zinc-700 text-white mt-1"
                 data-testid="input-product-image"
               />
+              <div className="flex items-center gap-3 mt-2">
+                <Input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploading} />
+                {uploading && <span className="text-sm text-zinc-400">Загрузка...</span>}
+              </div>
             </div>
 
             <div>

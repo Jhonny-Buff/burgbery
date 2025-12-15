@@ -76,6 +76,7 @@ export function UserAccount({ dashboard, onAuthChange, onClose }: UserAccountPro
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState({
+    identifier: '',
     nickname: '',
     phone: '',
     email: '',
@@ -108,7 +109,7 @@ export function UserAccount({ dashboard, onAuthChange, onClose }: UserAccountPro
         credentials: 'include',
         body: JSON.stringify(
           mode === 'login'
-            ? { identifier: form.phone || form.email, password: form.password }
+            ? { identifier: form.identifier, password: form.password }
             : {
                 nickname: form.nickname,
                 phone: form.phone,
@@ -126,6 +127,9 @@ export function UserAccount({ dashboard, onAuthChange, onClose }: UserAccountPro
 
       setMessage(mode === 'login' ? 'Вход выполнен' : 'Регистрация завершена');
       await refreshDashboard();
+      if (mode === 'login') {
+        onClose?.();
+      }
     } catch (err: any) {
       setMessage(err?.message || 'Ошибка запроса');
     } finally {
@@ -259,38 +263,50 @@ export function UserAccount({ dashboard, onAuthChange, onClose }: UserAccountPro
                   </div>
                 </div>
 
-                {mode === 'register' && (
+                {mode === 'login' ? (
                   <div className="space-y-2">
-                    <Label className="text-zinc-300">Никнейм</Label>
+                    <Label className="text-zinc-300">Телефон или почта</Label>
                     <Input
-                      placeholder="Ваш ник"
-                      value={form.nickname}
-                      onChange={(e) => updateField('nickname', e.target.value)}
+                      placeholder="+7... или email"
+                      value={form.identifier}
+                      onChange={(e) => updateField('identifier', e.target.value)}
                       className="bg-zinc-800 border-zinc-700 text-white"
                     />
                   </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Никнейм</Label>
+                      <Input
+                        placeholder="Ваш ник"
+                        value={form.nickname}
+                        onChange={(e) => updateField('nickname', e.target.value)}
+                        className="bg-zinc-800 border-zinc-700 text-white"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Телефон</Label>
+                      <Input
+                        placeholder="+7 (___) ___-__-__"
+                        value={form.phone}
+                        onChange={(e) => updateField('phone', e.target.value)}
+                        className="bg-zinc-800 border-zinc-700 text-white"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-zinc-300">Почта</Label>
+                      <Input
+                        type="email"
+                        placeholder="you@example.com"
+                        value={form.email}
+                        onChange={(e) => updateField('email', e.target.value)}
+                        className="bg-zinc-800 border-zinc-700 text-white"
+                      />
+                    </div>
+                  </>
                 )}
-
-                <div className="space-y-2">
-                  <Label className="text-zinc-300">Телефон</Label>
-                  <Input
-                    placeholder="+7 (___) ___-__-__"
-                    value={form.phone}
-                    onChange={(e) => updateField('phone', e.target.value)}
-                    className="bg-zinc-800 border-zinc-700 text-white"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-zinc-300">Почта</Label>
-                  <Input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={form.email}
-                    onChange={(e) => updateField('email', e.target.value)}
-                    className="bg-zinc-800 border-zinc-700 text-white"
-                  />
-                </div>
 
                 <div className="space-y-2">
                   <Label className="text-zinc-300">Пароль</Label>

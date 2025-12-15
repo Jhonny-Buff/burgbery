@@ -312,7 +312,7 @@ export default function Home() {
                 dashboard={userDashboard}
                 onAuthChange={async () => {
                   await refetchDashboard();
-                  setIsAccountOpen(true);
+                  setIsAccountOpen(false);
                 }}
                 onClose={() => setIsAccountOpen(false)}
               />

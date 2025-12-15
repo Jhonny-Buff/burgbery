@@ -30,6 +30,8 @@ import { AdminPromoCodes } from '@/components/admin/AdminPromoCodes';
 import { AdminVacancies } from '@/components/admin/AdminVacancies';
 import { AdminLoyalty } from '@/components/admin/AdminLoyalty';
 import { AdminSettings } from '@/components/admin/AdminSettings';
+import { AdminPromotions } from '@/components/admin/AdminPromotions';
+import { AdminUsers } from '@/components/admin/AdminUsers';
 import type { Order, Customer, Product } from '@shared/schema';
 
 interface AdminDashboardProps {
@@ -42,10 +44,12 @@ type AdminTab =
   | 'products'
   | 'orders'
   | 'customers'
+  | 'users'
   | 'blacklist'
   | 'promo'
   | 'vacancies'
   | 'loyalty'
+  | 'promotions'
   | 'settings';
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
@@ -87,7 +91,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     { id: 'orders', label: 'Заказы', icon: ShoppingCart, badge: pendingOrders > 0 ? pendingOrders : undefined },
     { id: 'products', label: 'Товары', icon: Package },
     { id: 'categories', label: 'Категории', icon: FolderOpen },
+    { id: 'promotions', label: 'Акции', icon: Gift },
     { id: 'customers', label: 'Клиенты', icon: Users },
+    { id: 'users', label: 'Аккаунты', icon: User },
     { id: 'blacklist', label: 'Черный список', icon: Ban },
     { id: 'promo', label: 'Промокоды', icon: Ticket },
     { id: 'vacancies', label: 'Вакансии', icon: Briefcase },
@@ -203,10 +209,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         return <AdminOrders />;
       case 'customers':
         return <AdminCustomers />;
+      case 'users':
+        return <AdminUsers />;
       case 'blacklist':
         return <AdminBlacklist />;
       case 'promo':
         return <AdminPromoCodes />;
+      case 'promotions':
+        return <AdminPromotions />;
       case 'vacancies':
         return <AdminVacancies />;
       case 'loyalty':

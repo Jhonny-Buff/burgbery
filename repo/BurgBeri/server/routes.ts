@@ -22,6 +22,7 @@ import {
   orderStatusHistory as orderStatusHistoryTable,
   siteSettings as siteSettingsTable,
   promotions as promotionsTable,
+  users as usersTable,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
@@ -138,6 +139,13 @@ const createVacancySchema = z.object({
   sortOrder: z.number().int().optional(),
 });
 
+const adminUpdateUserSchema = z.object({
+  nickname: z.string().min(2).optional(),
+  phone: z.string().min(5).optional(),
+  email: z.string().email().optional().or(z.literal("")),
+  password: z.string().min(6).optional(),
+});
+
 const updateVacancySchema = createVacancySchema.partial();
 
 const createLoyaltyRuleSchema = z.object({
@@ -230,6 +238,21 @@ function isWithinWorkingHours(date = new Date()): boolean {
   return minutes >= WORK_START_MINUTES && minutes <= WORK_END_MINUTES;
 }
 
+async function ensureDatabaseSchema() {
+  await db.execute(
+    sql`ALTER TABLE loyalty_rules ADD COLUMN IF NOT EXISTS discount_type text DEFAULT 'percent'`,
+  );
+  await db.execute(
+    sql`ALTER TABLE loyalty_rules ADD COLUMN IF NOT EXISTS discount_value integer DEFAULT 0`,
+  );
+  await db.execute(
+    sql`ALTER TABLE loyalty_rules ADD COLUMN IF NOT EXISTS usage_limit integer`,
+  );
+  await db.execute(
+    sql`ALTER TABLE loyalty_rules ALTER COLUMN discount_type SET DEFAULT 'percent'`,
+  );
+}
+
 function handleError(res: Response, err: unknown) {
   console.error(err);
   if (!res.headersSent) {
@@ -263,6 +286,8 @@ export async function registerRoutes(
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
   app.use("/uploads", express.static(uploadsDir));
+
+  await ensureDatabaseSchema();
 
   const uploadBodyParser = express.raw({
     type: (req) =>
@@ -926,6 +951,66 @@ export async function registerRoutes(
     try {
       const customers = await storage.getCustomers();
       res.json(customers);
+    } catch (err) {
+      handleError(res, err);
+    }
+  });
+
+  router.get("/admin/users", requireAdmin, async (_req, res) => {
+    try {
+      const users = await storage.getUsers();
+      const stats = await db
+        .select({
+          userId: ordersTable.userId,
+          ordersCount: sql<number>`count(*)`,
+          totalSpent: sql<number>`coalesce(sum(${ordersTable.total}), 0)`,
+        })
+        .from(ordersTable)
+        .where(sql`${ordersTable.userId} IS NOT NULL`)
+        .groupBy(ordersTable.userId);
+
+      const statsMap = new Map<number, { ordersCount: number; totalSpent: number }>();
+      stats.forEach((s) => {
+        if (s.userId) {
+          statsMap.set(s.userId, {
+            ordersCount: Number(s.ordersCount),
+            totalSpent: Number(s.totalSpent),
+          });
+        }
+      });
+
+      res.json(
+        users.map((u) => ({
+          ...u,
+          totalOrders: statsMap.get(u.id)?.ordersCount || 0,
+          totalSpent: statsMap.get(u.id)?.totalSpent || 0,
+        })),
+      );
+    } catch (err) {
+      handleError(res, err);
+    }
+  });
+
+  router.get("/admin/users/:id/orders", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.id);
+      const ordersWithItems = await storage.getUserOrders(userId, 50);
+      res.json(ordersWithItems);
+    } catch (err) {
+      handleError(res, err);
+    }
+  });
+
+  router.patch("/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const parsed = adminUpdateUserSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Некорректные данные" });
+      }
+
+      const updated = await storage.updateUser(Number(req.params.id), parsed.data as any);
+      if (!updated) return res.status(404).json({ message: "Пользователь не найден" });
+      res.json(updated);
     } catch (err) {
       handleError(res, err);
     }
